@@ -1,18 +1,41 @@
+import { useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import GalleryPage from './pages/GalleryPage';
 import GraphPage from './pages/GraphPage';
+import CreateIdeaModal from './components/CreateIdeaModal';
+import { INITIAL_NODES, INITIAL_LINKS } from './data/mockData';
 
 export default function App() {
+  const [nodes, setNodes] = useState(INITIAL_NODES);
+  const [links, setLinks] = useState(INITIAL_LINKS);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const handleAddIdea = (newNode, targetNodeId) => {
+    setNodes((prev) => [...prev, newNode]);
+
+    if (targetNodeId) {
+      setLinks((prev) => [...prev, { source: newNode.id, target: targetNodeId }]);
+    }
+  };
+
   return (
     <BrowserRouter>
-      <Navbar />
+      <Navbar onAddClick={() => setIsModalOpen(true)} />
+      
       <main>
         <Routes>
-          <Route path="/" element={<GalleryPage />} />
-          <Route path="/graph" element={<GraphPage />} />
+          <Route path="/" element={<GalleryPage nodes={nodes} links={links} />} />
+          <Route path="/graph" element={<GraphPage nodes={nodes} links={links} />} />
         </Routes>
       </main>
+
+      <CreateIdeaModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        nodes={nodes}
+        onAddIdea={handleAddIdea}
+      />
     </BrowserRouter>
   );
 }

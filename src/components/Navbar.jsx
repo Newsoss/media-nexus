@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { LayoutGrid, GitMerge, Plus } from 'lucide-react';
 
-export default function Navbar() {
+export default function Navbar({ onAddClick }) {
   const { pathname } = useLocation();
 
   const getLinkStyle = (path) => ({
@@ -25,7 +25,7 @@ export default function Navbar() {
         </Link>
       </div>
 
-      <button style={styles.addButton}>
+      <button style={styles.addButton} onClick={onAddClick}>
         <Plus size={18} /> Новая идея
       </button>
     </nav>
@@ -45,11 +45,7 @@ const styles = {
     top: 0,
     zIndex: 100
   },
-  logo: {
-    fontSize: '20px',
-    fontWeight: 700,
-    letterSpacing: '-0.5px'
-  },
+  logo: { fontSize: '20px', fontWeight: 700, letterSpacing: '-0.5px' },
   menu: {
     display: 'flex',
     gap: '8px',
@@ -66,8 +62,7 @@ const styles = {
     padding: '8px 16px',
     borderRadius: '8px',
     fontSize: '14px',
-    fontWeight: 500,
-    transition: 'all 0.2s ease'
+    fontWeight: 500
   },
   addButton: {
     display: 'flex',
@@ -80,7 +75,6 @@ const styles = {
     borderRadius: '8px',
     cursor: 'pointer',
     fontSize: '14px',
-    fontWeight: 600,
-    transition: 'background 0.2s'
+    fontWeight: 600
   }
 };
