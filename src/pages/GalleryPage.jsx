@@ -1,8 +1,12 @@
 import { Link2 } from 'lucide-react';
 
-export default function GalleryPage({ nodes, links }) {
+export default function GalleryPage({ nodes, links, onCardClick }) {
   const getConnectionsCount = (id) => {
-    return links.filter(l => l.source === id || l.target === id || l.source?.id === id || l.target?.id === id).length;
+    return links.filter(l => {
+      const src = l.source?.id ?? l.source;
+      const tgt = l.target?.id ?? l.target;
+      return src === id || tgt === id;
+    }).length;
   };
 
   return (
@@ -16,7 +20,11 @@ export default function GalleryPage({ nodes, links }) {
 
       <div style={styles.grid}>
         {nodes.map((item) => (
-          <div key={item.id} style={styles.card}>
+          <div 
+            key={item.id} 
+            style={styles.card} 
+            onClick={() => onCardClick(item)}
+          >
             <img src={item.image} alt={item.name} style={styles.cardImage} />
             <div style={styles.cardBody}>
               <div style={styles.cardHeader}>
@@ -53,7 +61,9 @@ const styles = {
     backgroundColor: '#161922',
     border: '1px solid #232733',
     borderRadius: '14px',
-    overflow: 'hidden'
+    overflow: 'hidden',
+    cursor: 'pointer',
+    transition: 'transform 0.2s, border-color 0.2s'
   },
   cardImage: { width: '100%', height: '180px', objectFit: 'cover' },
   cardBody: { padding: '16px' },
