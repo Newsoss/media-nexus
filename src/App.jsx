@@ -1,129 +1,101 @@
-import { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import GalleryPage from './pages/GalleryPage';
 import GraphPage from './pages/GraphPage';
 import CreateIdeaModal from './components/CreateIdeaModal';
 import CardDetailModal from './components/CardDetailModal';
-
-const API_URL = 'http://localhost:5000/api';
+import BoardPanel from './components/BoardPanel';
+import { request } from './api';
 
 export default function App() {
-  const [nodes, setNodes] = useState([]);
-  const [links, setLinks] = useState([]);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedCard, setSelectedCard] = useState(null);
+  const [data, setData] = useState({ nodes: [], links: [], boards: [] });
   const [loading, setLoading] = useState(true);
-
-  // забираем данные из sqlite при открытии сайта
-  const fetchData = async () => {
-    try {
-      const res = await fetch(`${API_URL}/data`);
-      const data = await res.json();
-      setNodes(data.nodes || []);
-      setLinks(data.links || []);
-    } catch (err) {
-      console.error('ошибка загрузки из бд:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [activeBoard, setActiveBoard] = useState('all');
+  const [selectedId, setSelectedId] = useState(null);
+  const [editor, setEditor] = useState(null);
+  const { nodes, links, boards } = data;
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  // добавление карточки в sqlite
-  const handleAddIdea = async (newNode, targetNodeId) => {
-    try {
-      const res = await fetch(`${API_URL}/nodes`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: newNode.name,
-          desc: newNode.desc,
-          image: newNode.image,
-          tags: newNode.tags,
-          targetNodeId: targetNodeId || null
-        })
-      });
-
-      if (!res.ok) throw new Error('ошибка сервера');
-      const data = await res.json();
-
-      setNodes((prev) => [...prev, data.node]);
-      if (data.link) {
-        setLinks((prev) => [...prev, data.link]);
+    const controller = new AbortController();
+    request('/data', { signal: controller.signal }).then(result => {
+      setData(result);
+      setError('');
+      setLoading(false);
+    }).catch(err => {
+      if (err.name !== 'AbortError') {
+        setError('Не удалось загрузить материалы. Проверьте, запущен ли сервер.');
+        setLoading(false);
       }
-    } catch (err) {
-      console.error('не вышло добавить узел:', err);
-    }
-  };
+    });
+    return () => controller.abort();
+  }, [reload]);
 
-  // удаление карточки из sqlite
-  const handleDeleteCard = async (cardId) => {
+  const mutate = async (path, options) => {
+    const result = await request(path, options);
+    setData(result);
+    return result;
+  };
+  const createTopic = async name => {
+    const existing = boards.find(board => board.name.trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase());
+    if (existing) return existing.id;
+    const result = await mutate('/boards', { method: 'POST', body: { name: name.trim() } });
+    return result.boards.at(-1).id;
+  };
+  const saveCard = async card => {
+    await mutate(editor.card ? `/nodes/${editor.card.id}` : '/nodes', {
+      method: editor.card ? 'PUT' : 'POST', body: card
+    });
+    setEditor(null);
+  };
+  const moveCard = async (id, position) => {
+    const original = nodes.find(node => node.id === id);
+    setData(current => ({ ...current, nodes: current.nodes.map(node => node.id === id ? {
+      ...node, positionX: position.x, positionY: position.y
+    } : node) }));
     try {
-      const res = await fetch(`${API_URL}/nodes/${cardId}`, {
-        method: 'DELETE'
-      });
-
-      if (!res.ok) throw new Error('ошибка при удалении');
-
-      setNodes((prev) => prev.filter((n) => n.id !== cardId));
-      setLinks((prev) => prev.filter((l) => {
-        const src = l.source?.id ?? l.source;
-        const tgt = l.target?.id ?? l.target;
-        return src !== cardId && tgt !== cardId;
-      }));
-      setSelectedCard(null);
+      await request(`/nodes/${id}/position`, { method: 'PATCH', body: position });
     } catch (err) {
-      console.error('не удалось удалить:', err);
+      setData(current => ({ ...current, nodes: current.nodes.map(node => node.id === id ? {
+        ...node, positionX: original.positionX, positionY: original.positionY
+      } : node) }));
+      throw err;
     }
   };
+  const deleteCard = async id => {
+    await mutate(`/nodes/${id}`, { method: 'DELETE' });
+    setSelectedId(null);
+  };
+  const visibleNodes = useMemo(() => nodes.filter(node => activeBoard === 'all' ||
+    node.boardIds.includes(activeBoard)), [nodes, activeBoard]);
+  const visibleLinks = useMemo(() => {
+    const visibleIds = new Set(visibleNodes.map(node => node.id));
+    return links.filter(link => visibleIds.has(link.source) && visibleIds.has(link.target));
+  }, [links, visibleNodes]);
+  const selectedCard = nodes.find(node => node.id === selectedId);
+  const boardName = activeBoard === 'all' ? 'Все материалы' : boards.find(board => board.id === activeBoard)?.name;
 
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#94a3b8' }}>
-        загрузка данных из базы...
-      </div>
-    );
-  }
+  if (loading) return <p className="status-message">Загрузка материалов...</p>;
+  if (error) return <div className="status-message"><p role="alert">{error}</p><button onClick={() => setReload(value => value + 1)}>Повторить</button></div>;
 
   return (
     <BrowserRouter>
-      <Navbar onAddClick={() => setIsModalOpen(true)} />
-      
-      <main>
+      <Navbar onAddClick={() => setEditor({ card: null })} />
+      <div className="workspace">
+      <BoardPanel boards={boards} nodes={nodes} activeBoard={activeBoard} onSelect={setActiveBoard} onMutate={mutate} />
+      <main className="workspace-main">
         <Routes>
-          <Route 
-            path="/" 
-            element={
-              <GalleryPage 
-                nodes={nodes} 
-                links={links} 
-                onCardClick={(card) => setSelectedCard(card)} 
-              />
-            } 
-          />
-          <Route path="/graph" element={<GraphPage nodes={nodes} links={links} />} />
+          <Route path="/" element={<GalleryPage key={activeBoard} onAddIdea={kind => setEditor({ card: null, kind })} onMove={moveCard} nodes={visibleNodes} boards={boards} title={boardName} onCardClick={card => setSelectedId(card.id)} />} />
+          <Route path="/graph" element={<GraphPage nodes={visibleNodes} links={visibleLinks} onCardClick={card => setSelectedId(card.id)} />} />
         </Routes>
       </main>
-
-      <CreateIdeaModal 
-        isOpen={isModalOpen} 
-        onClose={() => setIsModalOpen(false)} 
-        nodes={nodes}
-        onAddIdea={handleAddIdea}
-      />
-
-      <CardDetailModal
-        card={selectedCard}
-        isOpen={!!selectedCard}
-        onClose={() => setSelectedCard(null)}
-        nodes={nodes}
-        links={links}
-        onDelete={handleDeleteCard}
-      />
+      </div>
+      {editor && <CreateIdeaModal key={editor.card?.id || 'new'} card={editor.card} nodes={nodes} links={links} boards={boards}
+        startWithImage={editor.kind === 'image'} defaultBoardId={typeof activeBoard === 'number' ? activeBoard : null} onClose={() => setEditor(null)} onSave={saveCard} onCreateTopic={createTopic} />}
+      {!editor && selectedCard && <CardDetailModal key={selectedCard.id} card={selectedCard} nodes={nodes} links={links} boards={boards}
+        onClose={() => setSelectedId(null)} onDelete={deleteCard} onEdit={() => setEditor({ card: selectedCard })} onNavigate={setSelectedId} />}
     </BrowserRouter>
   );
 }

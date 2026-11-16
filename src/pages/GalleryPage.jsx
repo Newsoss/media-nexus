@@ -1,86 +1,100 @@
-import { Link2 } from 'lucide-react';
+import { useState } from 'react';
+import { NavLink } from 'react-router-dom';
+import { FileText, ImagePlus, GripHorizontal, Network, ChevronRight, PanelTop } from 'lucide-react';
+import CardImage from '../components/CardImage';
 
-export default function GalleryPage({ nodes, links, onCardClick }) {
-  const getConnectionsCount = (id) => {
-    return links.filter(l => {
-      const src = l.source?.id ?? l.source;
-      const tgt = l.target?.id ?? l.target;
-      return src === id || tgt === id;
-    }).length;
+const CARD_WIDTH = 236;
+const clamp = value => Math.round(Math.max(16, Math.min(10000, value)));
+const isNote = node => !node.image || node.image.includes('photo-1618005182384-a83a8bd57fbe');
+const initialPosition = (node, index) => ({
+  x: node.positionX ?? 36 + (index % 3) * 278,
+  y: node.positionY ?? 34 + Math.floor(index / 3) * 366 + (index % 3 === 1 ? 36 : 0)
+});
+
+export default function GalleryPage({ nodes, boards, title = 'Все материалы', onCardClick, onAddIdea, onMove }) {
+  const [drag, setDrag] = useState(null);
+  const [pending, setPending] = useState([]);
+  const [status, setStatus] = useState('');
+  const [error, setError] = useState('');
+  const positions = new Map(nodes.map((node, index) => [node.id,
+    drag?.id === node.id ? { x: drag.x, y: drag.y } : initialPosition(node, index)]));
+  const width = Math.max(880, ...Array.from(positions.values(), position => position.x + CARD_WIDTH + 70));
+  const height = Math.max(660, ...Array.from(positions.values(), position => position.y + 380));
+
+  const persist = async (id, position) => {
+    setPending(ids => [...ids, id]);
+    setStatus('Сохранение расположения...');
+    setError('');
+    try { await onMove(id, position); setStatus('Расположение сохранено'); }
+    catch (err) { setError(`Не удалось сохранить расположение: ${err.message}`); setStatus(''); }
+    finally { setPending(ids => ids.filter(value => value !== id)); }
+  };
+  const startDrag = (event, node) => {
+    if (event.button !== 0 || pending.includes(node.id)) return;
+    event.preventDefault();
+    const position = positions.get(node.id);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setDrag({ id: node.id, x: position.x, y: position.y, initialX: position.x, initialY: position.y, clientX: event.clientX, clientY: event.clientY });
+  };
+  const moveDrag = event => {
+    if (!drag) return;
+    setDrag(current => current && ({ ...current,
+      x: clamp(current.initialX + event.clientX - current.clientX),
+      y: clamp(current.initialY + event.clientY - current.clientY)
+    }));
+  };
+  const finishDrag = () => {
+    if (!drag) return;
+    const { id, x, y, initialX, initialY } = drag;
+    setDrag(null);
+    if (x !== initialX || y !== initialY) persist(id, { x, y });
+  };
+  const moveWithKeys = (event, node) => {
+    const directions = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (!directions[event.key] || pending.includes(node.id)) return;
+    event.preventDefault();
+    const position = positions.get(node.id);
+    const [dx, dy] = directions[event.key];
+    const step = event.shiftKey ? 50 : 10;
+    persist(node.id, { x: clamp(position.x + dx * step), y: clamp(position.y + dy * step) });
   };
 
-  return (
-    <div style={styles.container}>
-      <header style={styles.header}>
-        <div>
-          <h1 style={styles.title}>Все материалы</h1>
-          <p style={styles.subtitle}>Хранилище медиафайлов и концепций</p>
-        </div>
-      </header>
-
-      <div style={styles.grid}>
-        {nodes.map((item) => (
-          <div 
-            key={item.id} 
-            style={styles.card} 
-            onClick={() => onCardClick(item)}
-          >
-            <img src={item.image} alt={item.name} style={styles.cardImage} />
-            <div style={styles.cardBody}>
-              <div style={styles.cardHeader}>
-                <h3 style={styles.cardTitle}>{item.name}</h3>
-                <span style={styles.badge}>
-                  <Link2 size={12} /> {getConnectionsCount(item.id)}
-                </span>
-              </div>
-              <p style={styles.cardDesc}>{item.desc}</p>
-              <div style={styles.tagList}>
-                {item.tags.map((t) => (
-                  <span key={t} style={styles.tag}>#{t}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
+  return <section className="board-page">
+    <header className="board-heading">
+      <div><p className="board-breadcrumb">Мои темы<ChevronRight size={12} />{title}</p><h1>{title}</h1></div>
+      <div className="board-summary"><span>Материалов: {nodes.length}</span><p role="status">{status || 'Перетаскивайте карточки за верхний край'}</p></div>
+    </header>
+    {error && <p className="layout-error" role="alert">{error}</p>}
+    <div className="canvas-layout">
+      <aside className="canvas-toolbar" aria-label="Инструменты доски">
+        <button onClick={() => onAddIdea('note')}><FileText size={23} /><span>Заметка</span></button>
+        <button onClick={() => onAddIdea('image')}><ImagePlus size={23} /><span>Картинка</span></button>
+        <hr />
+        <NavLink to="/graph"><Network size={23} /><span>Граф</span></NavLink>
+      </aside>
+      <div className="canvas-viewport" aria-label={`Рабочее поле: ${title}`}>
+        {!nodes.length ? <div className="empty-board"><PanelTop size={32} /><h2>Здесь начнётся новая доска</h2><p>Добавьте картинку или запишите первую мысль.</p><button onClick={() => onAddIdea('note')}>Добавить заметку</button></div> :
+          <div className="board-surface" style={{ width, height }}>
+            {nodes.map(node => {
+              const position = positions.get(node.id);
+              const note = isNote(node);
+              return <article key={node.id} className={`board-card ${note ? 'note-card' : ''} ${drag?.id === node.id ? 'is-dragging' : ''}`}
+                style={{ left: position.x, top: position.y }}>
+                <button className="card-drag-handle" aria-label={`Переместить: ${node.name}`} title="Перетащите мышью или используйте стрелки клавиатуры"
+                  disabled={pending.includes(node.id)} onPointerDown={event => startDrag(event, node)} onPointerMove={moveDrag}
+                  onPointerUp={finishDrag} onPointerCancel={() => setDrag(null)} onKeyDown={event => moveWithKeys(event, node)}>
+                  <span>{note ? 'Заметка' : 'Изображение'}</span><GripHorizontal size={16} />
+                </button>
+                <button className="board-card-content" onClick={() => onCardClick(node)}>
+                  {!note && <CardImage src={node.image} alt="" className="card-image" />}
+                  <div className="card-body"><h2>{node.name}</h2><p className="card-topic-names">{boards.filter(board => node.boardIds.includes(board.id)).map(board => board.name).join(' · ')}</p><p className="card-description">{node.desc || 'Добавьте описание...'}</p>
+                    <div className="card-footer"><div className="card-tags">{node.tags.slice(0, 3).map(tag => <span key={tag}>#{tag}</span>)}</div></div>
+                  </div>
+                </button>
+              </article>;
+            })}
+          </div>}
       </div>
     </div>
-  );
+  </section>;
 }
-
-const styles = {
-  container: { maxWidth: '1200px', margin: '0 auto', padding: '32px 24px' },
-  header: { marginBottom: '28px' },
-  title: { fontSize: '24px', fontWeight: 700, marginBottom: '4px' },
-  subtitle: { color: '#64748b', fontSize: '14px' },
-  grid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '24px'
-  },
-  card: {
-    backgroundColor: '#161922',
-    border: '1px solid #232733',
-    borderRadius: '14px',
-    overflow: 'hidden',
-    cursor: 'pointer',
-    transition: 'transform 0.2s, border-color 0.2s'
-  },
-  cardImage: { width: '100%', height: '180px', objectFit: 'cover' },
-  cardBody: { padding: '16px' },
-  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' },
-  cardTitle: { fontSize: '16px', fontWeight: 600, color: '#f1f5f9' },
-  badge: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '4px',
-    backgroundColor: '#282d3d',
-    color: '#818cf8',
-    padding: '2px 8px',
-    borderRadius: '20px',
-    fontSize: '12px',
-    fontWeight: 600
-  },
-  cardDesc: { fontSize: '13px', color: '#94a3b8', lineHeight: '1.4', marginBottom: '12px' },
-  tagList: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
-  tag: { backgroundColor: '#1e2230', color: '#64748b', padding: '3px 8px', borderRadius: '6px', fontSize: '11px' }
-};
