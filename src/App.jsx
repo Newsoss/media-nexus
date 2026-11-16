@@ -1,35 +1,93 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import GalleryPage from './pages/GalleryPage';
 import GraphPage from './pages/GraphPage';
 import CreateIdeaModal from './components/CreateIdeaModal';
 import CardDetailModal from './components/CardDetailModal';
-import { INITIAL_NODES, INITIAL_LINKS } from './data/mockData';
+
+const API_URL = 'http://localhost:5000/api';
 
 export default function App() {
-  const [nodes, setNodes] = useState(INITIAL_NODES);
-  const [links, setLinks] = useState(INITIAL_LINKS);
+  const [nodes, setNodes] = useState([]);
+  const [links, setLinks] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedCard, setSelectedCard] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const handleAddIdea = (newNode, targetNodeId) => {
-    setNodes((prev) => [...prev, newNode]);
-    if (targetNodeId) {
-      setLinks((prev) => [...prev, { source: newNode.id, target: targetNodeId }]);
+  // забираем данные из sqlite при открытии сайта
+  const fetchData = async () => {
+    try {
+      const res = await fetch(`${API_URL}/data`);
+      const data = await res.json();
+      setNodes(data.nodes || []);
+      setLinks(data.links || []);
+    } catch (err) {
+      console.error('ошибка загрузки из бд:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // удаление узла и связанных с ним линий
-  const handleDeleteCard = (cardId) => {
-    setNodes((prev) => prev.filter((n) => n.id !== cardId));
-    setLinks((prev) => prev.filter((l) => {
-      const src = l.source?.id ?? l.source;
-      const tgt = l.target?.id ?? l.target;
-      return src !== cardId && tgt !== cardId;
-    }));
-    setSelectedCard(null);
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  // добавление карточки в sqlite
+  const handleAddIdea = async (newNode, targetNodeId) => {
+    try {
+      const res = await fetch(`${API_URL}/nodes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: newNode.name,
+          desc: newNode.desc,
+          image: newNode.image,
+          tags: newNode.tags,
+          targetNodeId: targetNodeId || null
+        })
+      });
+
+      if (!res.ok) throw new Error('ошибка сервера');
+      const data = await res.json();
+
+      setNodes((prev) => [...prev, data.node]);
+      if (data.link) {
+        setLinks((prev) => [...prev, data.link]);
+      }
+    } catch (err) {
+      console.error('не вышло добавить узел:', err);
+    }
   };
+
+  // удаление карточки из sqlite
+  const handleDeleteCard = async (cardId) => {
+    try {
+      const res = await fetch(`${API_URL}/nodes/${cardId}`, {
+        method: 'DELETE'
+      });
+
+      if (!res.ok) throw new Error('ошибка при удалении');
+
+      setNodes((prev) => prev.filter((n) => n.id !== cardId));
+      setLinks((prev) => prev.filter((l) => {
+        const src = l.source?.id ?? l.source;
+        const tgt = l.target?.id ?? l.target;
+        return src !== cardId && tgt !== cardId;
+      }));
+      setSelectedCard(null);
+    } catch (err) {
+      console.error('не удалось удалить:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#94a3b8' }}>
+        загрузка данных из базы...
+      </div>
+    );
+  }
 
   return (
     <BrowserRouter>
