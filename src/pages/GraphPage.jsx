@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 
-export default function GraphPage({ nodes, links, onCardClick }) {
+export default function GraphPage({ nodes, links, onCardClick, searchQuery }) {
   const container = useRef(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   // Библиотека изменяет узлы и связи при расчёте графа, поэтому передаём копии.
@@ -14,7 +14,7 @@ export default function GraphPage({ nodes, links, onCardClick }) {
     return () => observer.disconnect();
   }, []);
   return <div ref={container} className="graph-wrapper">
-    {!nodes.length ? <p className="status-message">Пока нет карточек для отображения.</p> : <>
+    {!nodes.length ? <p className="status-message">{searchQuery.trim() ? 'Поиск не дал результатов. Измените запрос или выберите другую тему.' : 'Пока нет карточек для отображения.'}</p> : <>
       <p className="graph-hint">Нажмите на узел, чтобы открыть карточку. Показаны связи внутри выбранной темы.</p>
       <ForceGraph2D graphData={graphData} width={size.width} height={size.height}
         backgroundColor="#ffffff" nodeColor={() => '#555555'} linkColor={() => '#bbbbbb'} linkWidth={2}

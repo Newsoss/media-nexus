@@ -11,7 +11,7 @@ const initialPosition = (node, index) => ({
   y: node.positionY ?? 34 + Math.floor(index / 3) * 366 + (index % 3 === 1 ? 36 : 0)
 });
 
-export default function GalleryPage({ nodes, boards, title = 'Все материалы', onCardClick, onAddIdea, onMove }) {
+export default function GalleryPage({ nodes, boards, title = 'Все материалы', onCardClick, onAddIdea, onMove, searchQuery, onClearSearch }) {
   const [drag, setDrag] = useState(null);
   const [pending, setPending] = useState([]);
   const [status, setStatus] = useState('');
@@ -62,7 +62,7 @@ export default function GalleryPage({ nodes, boards, title = 'Все матер�
   return <section className="board-page">
     <header className="board-heading">
       <div><p className="board-breadcrumb">Мои темы<ChevronRight size={12} />{title}</p><h1>{title}</h1></div>
-      <div className="board-summary"><span>Материалов: {nodes.length}</span><p role="status">{status || 'Перетаскивайте карточки за верхний край'}</p></div>
+      <div className="board-summary"><span>{searchQuery.trim() ? 'Найдено' : 'Материалов'}: {nodes.length}</span><p role="status">{status || 'Перетаскивайте карточки за верхний край'}</p></div>
     </header>
     {error && <p className="layout-error" role="alert">{error}</p>}
     <div className="canvas-layout">
@@ -73,7 +73,7 @@ export default function GalleryPage({ nodes, boards, title = 'Все матер�
         <NavLink to="/graph"><Network size={23} /><span>Граф</span></NavLink>
       </aside>
       <div className="canvas-viewport" aria-label={`Рабочее поле: ${title}`}>
-        {!nodes.length ? <div className="empty-board"><PanelTop size={32} /><h2>Здесь начнётся новая доска</h2><p>Добавьте картинку или запишите первую мысль.</p><button onClick={() => onAddIdea('note')}>Добавить заметку</button></div> :
+        {!nodes.length && searchQuery.trim() ? <div className="empty-board"><h2>Ничего не найдено</h2><p>Попробуйте другое слово или выберите другую тему.</p><button onClick={onClearSearch}>Очистить поиск</button></div> : !nodes.length ? <div className="empty-board"><PanelTop size={32} /><h2>Здесь начнётся новая доска</h2><p>Добавьте картинку или запишите первую мысль.</p><button onClick={() => onAddIdea('note')}>Добавить заметку</button></div> :
           <div className="board-surface" style={{ width, height }}>
             {nodes.map(node => {
               const position = positions.get(node.id);

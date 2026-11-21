@@ -147,3 +147,15 @@
 .new-topic-row button { flex-shrink: 0; border: 1px solid #cdd1c7; border-radius: 3px; padding: 10px 12px; background: #f2f5ed; color: #43573d; font-size: 12px; }
 .board-tabs > button.new-board { border-color: #d9e0d1; background: #f0f4eb; color: #506746; }
 @media (max-width: 420px) { .new-topic-row { align-items: stretch; flex-direction: column; } }
+.header-search { display: flex; align-items: center; gap: 7px; min-width: 120px; max-width: 290px; flex: 1; margin-left: auto; color: #86907f; }
+.header-search input { width: 100%; min-width: 0; border: 1px solid #dfe3d9; border-radius: 4px; background: #f8f9f6; padding: 8px 10px; color: #384332; font-size: 12px; }
+.header-search input::placeholder { color: #899280; }
+.header-search + .main-nav { margin-left: 0; }
+@media (max-width: 1100px) { .header-project { display: none; } }
+@media (max-width: 640px) {
+  .site-header { height: auto; min-height: 58px; padding-top: 10px; padding-bottom: 10px; flex-wrap: wrap; }
+  .header-search { order: 4; max-width: none; flex-basis: 100%; margin-left: 0; }
+  .header-search input { font-size: 16px; }
+  .main-nav { margin-left: auto; }
+  .workspace { height: calc(100dvh - 106px); }
+}

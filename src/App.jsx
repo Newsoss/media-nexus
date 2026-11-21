@@ -14,6 +14,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [activeBoard, setActiveBoard] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [selectedId, setSelectedId] = useState(null);
   const [editor, setEditor] = useState(null);
   const { nodes, links, boards } = data;
@@ -68,8 +69,11 @@ export default function App() {
     await mutate(`/nodes/${id}`, { method: 'DELETE' });
     setSelectedId(null);
   };
-  const visibleNodes = useMemo(() => nodes.filter(node => activeBoard === 'all' ||
-    node.boardIds.includes(activeBoard)), [nodes, activeBoard]);
+  const visibleNodes = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return nodes.filter(node => (activeBoard === 'all' || node.boardIds.includes(activeBoard)) &&
+      (!query || [node.name, node.desc, ...node.tags].join(' ').toLowerCase().includes(query)));
+  }, [nodes, activeBoard, searchQuery]);
   const visibleLinks = useMemo(() => {
     const visibleIds = new Set(visibleNodes.map(node => node.id));
     return links.filter(link => visibleIds.has(link.source) && visibleIds.has(link.target));
@@ -82,13 +86,13 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Navbar onAddClick={() => setEditor({ card: null })} />
+      <Navbar searchQuery={searchQuery} onSearchChange={setSearchQuery} onAddClick={() => setEditor({ card: null })} />
       <div className="workspace">
       <BoardPanel boards={boards} nodes={nodes} activeBoard={activeBoard} onSelect={setActiveBoard} onMutate={mutate} />
       <main className="workspace-main">
         <Routes>
-          <Route path="/" element={<GalleryPage key={activeBoard} onAddIdea={kind => setEditor({ card: null, kind })} onMove={moveCard} nodes={visibleNodes} boards={boards} title={boardName} onCardClick={card => setSelectedId(card.id)} />} />
-          <Route path="/graph" element={<GraphPage nodes={visibleNodes} links={visibleLinks} onCardClick={card => setSelectedId(card.id)} />} />
+          <Route path="/" element={<GalleryPage searchQuery={searchQuery} onClearSearch={() => setSearchQuery('')} key={activeBoard} onAddIdea={kind => setEditor({ card: null, kind })} onMove={moveCard} nodes={visibleNodes} boards={boards} title={boardName} onCardClick={card => setSelectedId(card.id)} />} />
+          <Route path="/graph" element={<GraphPage searchQuery={searchQuery} nodes={visibleNodes} links={visibleLinks} onCardClick={card => setSelectedId(card.id)} />} />
         </Routes>
       </main>
       </div>
