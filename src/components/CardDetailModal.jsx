@@ -1,33 +1,24 @@
-import { useState } from 'react';
 import { ArrowRight, Pencil, Trash2 } from 'lucide-react';
 import Modal from './Modal';
 import CardImage from './CardImage';
 
 export default function CardDetailModal({ card, nodes, links, boards, onClose, onDelete, onEdit, onNavigate }) {
-  const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState('');
   const connectedIds = new Set(links.filter(link => link.source === card.id || link.target === card.id)
     .map(link => link.source === card.id ? link.target : link.source));
   const connectedNodes = nodes.filter(node => connectedIds.has(node.id));
-  const remove = async () => {
-    if (deleting) return;
-    setDeleting(true);
-    try { await onDelete(card.id); } catch (err) { setError(err.message); setDeleting(false); }
-  };
-  return <Modal title={card.name} onClose={() => { if (!deleting) onClose(); }}>
+  return <Modal title={card.name} onClose={onClose}>
     <CardImage src={card.image} alt={card.name} className="detail-image" />
     <div className="detail-body">
       <p className="muted">Темы: {boards.filter(board => card.boardIds.includes(board.id)).map(board => board.name).join(', ') || 'Не выбраны'}</p>
       <p className="detail-description">{card.desc || 'Описание пока не добавлено.'}</p>
       <div className="detail-tags">{card.tags.map(tag => <span key={tag}>#{tag}</span>)}</div>
       <section className="relations"><h3>Связанные идеи · {connectedNodes.length}</h3>
-        {connectedNodes.length ? connectedNodes.map(node => <button key={node.id} className="relation-button" disabled={deleting} onClick={() => onNavigate(node.id)}>
+        {connectedNodes.length ? connectedNodes.map(node => <button key={node.id} className="relation-button" onClick={() => onNavigate(node.id)}>
           <CardImage src={node.image} alt="" className="relation-thumb" /><span>{node.name}</span><ArrowRight size={16} />
         </button>) : <p className="muted">Нет связей. Добавьте их при редактировании.</p>}
       </section>
-      {error && <p role="alert" className="error-message">{error}</p>}
-      <div className="actions"><button className="danger" disabled={deleting} onClick={remove}><Trash2 size={16} />{deleting ? 'Удаление...' : 'Удалить'}</button>
-        <button className="primary" disabled={deleting} onClick={onEdit}><Pencil size={16} />Редактировать</button></div>
+      <div className="actions"><button className="danger" onClick={() => onDelete(card.id)}><Trash2 size={16} />Удалить</button>
+        <button className="primary" onClick={onEdit}><Pencil size={16} />Редактировать</button></div>
     </div>
   </Modal>;
 }

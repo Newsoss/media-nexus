@@ -23,9 +23,10 @@ function localImage(src) {
 function ImageContent({ src, alt, className }) {
   const [failed, setFailed] = useState(false);
   const resolved = localImage(src);
-  if (!resolved || failed) return <div className={`${className} image-placeholder`} role="img" aria-label={failed ? 'Изображение недоступно' : 'Текстовая заметка'}>
-    <span>{failed ? 'Изображение недоступно' : 'Текстовая заметка'}</span>
-    {failed && <small>Откройте редактирование и выберите другой файл или ссылку.</small>}
+  if (!resolved) return null;
+  if (failed) return <div className={`${className} image-placeholder`} role="img" aria-label="Изображение недоступно">
+    <span>Изображение недоступно</span>
+    <small>Откройте редактирование и выберите другой файл или ссылку.</small>
   </div>;
   return <img src={resolved} alt={alt} className={className} loading="lazy" onError={() => setFailed(true)} />;
 }

@@ -6,15 +6,29 @@ import GraphPage from './pages/GraphPage';
 import CreateIdeaModal from './components/CreateIdeaModal';
 import CardDetailModal from './components/CardDetailModal';
 import BoardPanel from './components/BoardPanel';
+import DeleteCardModal from './components/DeleteCardModal';
 import { request } from './api';
 
 export default function App() {
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem('media-nexus-theme');
+      if (saved === 'light' || saved === 'dark') return saved;
+    } catch { /* Настройка работает и без доступа к хранилищу. */ }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  });
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try { localStorage.setItem('media-nexus-theme', theme); } catch { /* Только на текущий сеанс. */ }
+  }, [theme]);
   const [data, setData] = useState({ nodes: [], links: [], boards: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
   const [activeBoard, setActiveBoard] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortOrder, setSortOrder] = useState('newest');
+  const [deleteId, setDeleteId] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [editor, setEditor] = useState(null);
   const { nodes, links, boards } = data;
@@ -51,33 +65,24 @@ export default function App() {
     });
     setEditor(null);
   };
-  const moveCard = async (id, position) => {
-    const original = nodes.find(node => node.id === id);
-    setData(current => ({ ...current, nodes: current.nodes.map(node => node.id === id ? {
-      ...node, positionX: position.x, positionY: position.y
-    } : node) }));
-    try {
-      await request(`/nodes/${id}/position`, { method: 'PATCH', body: position });
-    } catch (err) {
-      setData(current => ({ ...current, nodes: current.nodes.map(node => node.id === id ? {
-        ...node, positionX: original.positionX, positionY: original.positionY
-      } : node) }));
-      throw err;
-    }
-  };
   const deleteCard = async id => {
     await mutate(`/nodes/${id}`, { method: 'DELETE' });
     setSelectedId(null);
+    setDeleteId(null);
   };
   const visibleNodes = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return nodes.filter(node => (activeBoard === 'all' || node.boardIds.includes(activeBoard)) &&
-      (!query || [node.name, node.desc, ...node.tags].join(' ').toLowerCase().includes(query)));
-  }, [nodes, activeBoard, searchQuery]);
+      (!query || [node.name, node.desc, ...node.tags].join(' ').toLowerCase().includes(query)))
+      .sort((a, b) => sortOrder === 'name'
+        ? a.name.localeCompare(b.name, 'ru', { sensitivity: 'base' }) || a.id - b.id
+        : sortOrder === 'oldest' ? a.id - b.id : b.id - a.id);
+  }, [nodes, activeBoard, searchQuery, sortOrder]);
   const visibleLinks = useMemo(() => {
     const visibleIds = new Set(visibleNodes.map(node => node.id));
     return links.filter(link => visibleIds.has(link.source) && visibleIds.has(link.target));
   }, [links, visibleNodes]);
+  const cardToDelete = nodes.find(node => node.id === deleteId);
   const selectedCard = nodes.find(node => node.id === selectedId);
   const boardName = activeBoard === 'all' ? 'Все материалы' : boards.find(board => board.id === activeBoard)?.name;
 
@@ -86,20 +91,21 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Navbar searchQuery={searchQuery} onSearchChange={setSearchQuery} onAddClick={() => setEditor({ card: null })} />
+      <Navbar theme={theme} onToggleTheme={() => setTheme(value => value === 'dark' ? 'light' : 'dark')} searchQuery={searchQuery} onSearchChange={setSearchQuery} onAddClick={() => setEditor({ card: null })} />
       <div className="workspace">
       <BoardPanel boards={boards} nodes={nodes} activeBoard={activeBoard} onSelect={setActiveBoard} onMutate={mutate} />
       <main className="workspace-main">
         <Routes>
-          <Route path="/" element={<GalleryPage searchQuery={searchQuery} onClearSearch={() => setSearchQuery('')} key={activeBoard} onAddIdea={kind => setEditor({ card: null, kind })} onMove={moveCard} nodes={visibleNodes} boards={boards} title={boardName} onCardClick={card => setSelectedId(card.id)} />} />
-          <Route path="/graph" element={<GraphPage searchQuery={searchQuery} nodes={visibleNodes} links={visibleLinks} onCardClick={card => setSelectedId(card.id)} />} />
+          <Route path="/" element={<GalleryPage searchQuery={searchQuery} onClearSearch={() => setSearchQuery('')} key={activeBoard} onAddIdea={kind => setEditor({ card: null, kind })} onDelete={setDeleteId} sortOrder={sortOrder} onSortChange={setSortOrder} nodes={visibleNodes} boards={boards} title={boardName} onCardClick={card => setSelectedId(card.id)} />} />
+          <Route path="/graph" element={<GraphPage theme={theme} searchQuery={searchQuery} nodes={visibleNodes} links={visibleLinks} onCardClick={card => setSelectedId(card.id)} />} />
         </Routes>
       </main>
       </div>
       {editor && <CreateIdeaModal key={editor.card?.id || 'new'} card={editor.card} nodes={nodes} links={links} boards={boards}
         startWithImage={editor.kind === 'image'} defaultBoardId={typeof activeBoard === 'number' ? activeBoard : null} onClose={() => setEditor(null)} onSave={saveCard} onCreateTopic={createTopic} />}
-      {!editor && selectedCard && <CardDetailModal key={selectedCard.id} card={selectedCard} nodes={nodes} links={links} boards={boards}
-        onClose={() => setSelectedId(null)} onDelete={deleteCard} onEdit={() => setEditor({ card: selectedCard })} onNavigate={setSelectedId} />}
+      {!editor && !cardToDelete && selectedCard && <CardDetailModal key={selectedCard.id} card={selectedCard} nodes={nodes} links={links} boards={boards}
+        onClose={() => setSelectedId(null)} onDelete={setDeleteId} onEdit={() => setEditor({ card: selectedCard })} onNavigate={setSelectedId} />}
+      {cardToDelete && <DeleteCardModal key={cardToDelete.id} card={cardToDelete} onClose={() => setDeleteId(null)} onDelete={deleteCard} />}
     </BrowserRouter>
   );
 }

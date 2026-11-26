@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 
-export default function GraphPage({ nodes, links, onCardClick, searchQuery }) {
+export default function GraphPage({ nodes, links, onCardClick, searchQuery, theme }) {
+  const colors = theme === 'dark' ? { background: '#19232b', node: '#85bdf1', link: '#526c7e', text: '#e3ebf0' } : { background: '#eaf0f4', node: '#25639d', link: '#a8bdcc', text: '#2e3e49' };
   const container = useRef(null);
   const [size, setSize] = useState({ width: 800, height: 600 });
   // Библиотека изменяет узлы и связи при расчёте графа, поэтому передаём копии.
@@ -17,15 +18,15 @@ export default function GraphPage({ nodes, links, onCardClick, searchQuery }) {
     {!nodes.length ? <p className="status-message">{searchQuery.trim() ? 'Поиск не дал результатов. Измените запрос или выберите другую тему.' : 'Пока нет карточек для отображения.'}</p> : <>
       <p className="graph-hint">Нажмите на узел, чтобы открыть карточку. Показаны связи внутри выбранной темы.</p>
       <ForceGraph2D graphData={graphData} width={size.width} height={size.height}
-        backgroundColor="#ffffff" nodeColor={() => '#555555'} linkColor={() => '#bbbbbb'} linkWidth={2}
+        backgroundColor={colors.background} nodeColor={() => colors.node} linkColor={() => colors.link} linkWidth={2}
         nodeCanvasObject={(node, ctx, globalScale) => {
           ctx.beginPath();
           ctx.arc(node.x, node.y, 6, 0, Math.PI * 2);
-          ctx.fillStyle = '#555555';
+          ctx.fillStyle = colors.node;
           ctx.fill();
           ctx.font = `${12 / globalScale}px sans-serif`;
           ctx.textAlign = 'center';
-          ctx.fillStyle = '#555555';
+          ctx.fillStyle = colors.text;
           ctx.fillText(node.name, node.x, node.y + 14);
         }} onNodeClick={onCardClick} />
     </>}
